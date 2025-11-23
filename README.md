@@ -54,7 +54,11 @@ O fluxo de tráfego é gerenciado da seguinte forma:
     ```sh
     docker compose up -d --build
     ```
-
+4. **Caso quiser, inicie apenas o container hacknet-gateway**
+   Na raiz do projeto, execute:
+   ```sh
+    docker compose up -d --build hacknet-gateway
+    ```
 ---
 
 ## Como Usar
@@ -77,7 +81,7 @@ sudo /usr/local/bin/switch_net.sh --vpn
 ```
 **Verificação:**
 ```sh
-curl ipinfo.io/ip
+curl https://icanhazip.com
 # Deverá mostrar o IP do servidor VPN
 ```
 
@@ -88,13 +92,34 @@ sudo /usr/local/bin/switch_net.sh --tor
 ```
 **Verificação:**
 ```sh
-curl ipinfo.io/ip
+curl https://icanhazip.com
 # Deverá mostrar o IP de um nó de saída da rede Tor
 ```
 O script funciona alterando o endereço de IP de origem dos pacotes do contêiner Kali. O gateway identifica esse IP de origem especial e redireciona o tráfego para o proxy transparente do Tor.
 
 ---
+### Gerenciando o Roteamento diretamente no Host via Proxy:
+**Navegador:**
+No seu navegador de preferência, configure o proxy Socks5 com direcionamento do trafego para o container hacknet-gateway.   
+Ex:
+- 127.0.0.1:1080 (Saida pela VPN Wireguard)
+- 127.0.0.1:9050 (Saida pela rede TOR [TOR OVER VPN])
 
+**Outras ferramentas**   
+Qualquer ferramenta que tenha a capacidade de direcionar o trafego de rede via proxy SOCKS5 pode ser utilizada em conjunto com o container hacknet-gateway.   
+Ex:    
+VPN:
+```sh
+curl --proxy socks5h://127.0.0.1:1080 https://icanhazip.com
+```
+TOR:
+```sh
+curl --proxy socks5h://127.0.0.1:9050 https://icanhazip.com
+```
+OBS:   
+- A mesma lógica se aplica a configuração de proxy via navegador (firefox, chrome, edge, etc...)
+- Funciona também via [proxychains](https://www.pyproxy.com/information/how-to-configure-socks5-proxy-via-proxychains.html)
+  
 ## Para Desenvolvedores
 
 ### Estrutura do Projeto
