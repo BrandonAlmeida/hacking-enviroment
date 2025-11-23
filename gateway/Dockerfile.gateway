@@ -1,0 +1,56 @@
+FROM debian:stable
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+##############################
+# 1. Instalar dependências
+##############################
+RUN apt update && apt install -y \
+    iproute2 iptables nftables net-tools \
+    wireguard wireguard-tools openresolv \
+    tor torsocks e2fsprogs \
+    curl iputils-ping nano build-essential \
+    procps \
+    && apt clean
+
+##############################
+# 2. Compilar Dante (sockd)
+##############################
+RUN mkdir /build && \
+    cd /build && \
+    curl -LO https://www.inet.no/dante/files/dante-1.4.3.tar.gz && \
+    tar xzf dante-1.4.3.tar.gz && \
+    cd dante-1.4.3 && \
+    ./configure && make && make install && \
+    cd / && rm -rf /build
+
+##############################
+# 3. Criar diretórios
+##############################
+RUN mkdir -p /etc/wireguard /etc/tor /etc/danted /opt/gateway
+
+##############################
+# 4. Copiar configs
+##############################
+COPY wireguard/ /etc/wireguard/
+COPY tor/torrc /etc/tor/torrc
+COPY dante/danted.conf.template /etc/danted/danted.conf.template
+RUN cp /etc/danted/danted.conf.template /etc/danted/danted.conf
+COPY start.sh /opt/gateway/start.sh
+
+##############################
+# 5. Permissões
+##############################
+RUN chmod 600 /etc/wireguard/*.conf || true
+RUN chmod 644 /etc/tor/torrc
+RUN chmod 644 /etc/danted/danted.conf
+RUN chmod +x /opt/gateway/start.sh
+
+##############################
+# 6. IP Forwarding
+##############################
+RUN echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+
+EXPOSE 9050 9040 5353 1080
+
+CMD ["/opt/gateway/start.sh"]

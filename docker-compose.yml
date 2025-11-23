@@ -1,0 +1,60 @@
+version: "3.9"
+
+services:
+  kali-linux:
+    build:
+      context: ./kali
+      dockerfile: Dockerfile.kali
+    container_name: kali-linux
+    networks:
+      hacking_net:
+        ipv4_address: 10.77.10.2
+    tty: true
+    stdin_open: true
+    depends_on:
+      - hacknet-gateway
+    cap_add:
+      - NET_ADMIN
+    # Permite fazer o Kali usar o gateway como default route (se desejar)
+    environment:
+      - GATEWAY_IP=10.77.10.4
+      - TOR_SOURCE_IP=10.77.10.6
+
+  hacknet-gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile.gateway
+    container_name: hacknet-gateway
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_MODULE
+    privileged: true
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
+    networks:
+      hacking_net:
+        ipv4_address: 10.77.10.4
+    ports:
+      - "9050:9050"  # Tor SOCKS
+      - "9040:9040"  # Tor HTTP proxy (for host browser)
+      - "9041:9041"  # Tor transparent proxy (for Kali container)
+      - "5353:5353"  # Tor DNS
+      - "1080:1080"  # Dante SOCKS proxy
+    restart: unless-stopped
+    environment:
+      - WG_CONFIG=fi-hel-wg-101.conf
+      - TOR_CLIENT_IP=10.77.10.6
+    volumes:
+      - ./gateway/wireguard:/etc/wireguard:rw
+      - ./gateway/tor:/etc/tor:rw
+      - ./gateway/dante:/etc/danted:rw
+
+networks:
+  hacking_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.77.10.0/28

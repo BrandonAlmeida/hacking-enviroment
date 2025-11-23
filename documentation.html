@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentação do Ambiente de Hacking</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        code {
+            background-color: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.95em;
+        }
+        pre {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .note {
+            background-color: #eaf2f8;
+            border-left: 5px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        ul {
+            list-style-type: square;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Documentação do Ambiente de Hacking Seguro</h1>
+
+        <h2>1. Visão Geral</h2>
+        <p>
+            Este projeto cria um ambiente Docker seguro e modular, projetado para atividades de segurança e hacking. A arquitetura consiste em dois contêineres principais: um <strong>gateway de rede</strong> (`hacknet-gateway`) e um <strong>cliente Kali Linux</strong> (`kali-linux`).
+        </p>
+        <p>
+            O objetivo é forçar todo o tráfego de internet do contêiner Kali e do navegador do host a passar por um túnel VPN (WireGuard), com a opção de usar a rede Tor. Um firewall robusto ("Kill Switch") garante que não haja vazamento de IP caso a conexão VPN falhe.
+        </p>
+
+        <h2>2. Arquitetura</h2>
+        
+        <h3>2.1. Contêineres</h3>
+        <ul>
+            <li>
+                <strong>`hacknet-gateway`</strong>: O cérebro da operação. Este contêiner é responsável por:
+                <ul>
+                    <li>Estabelecer a conexão VPN (WireGuard).</li>
+                    <li>Roteamento de todo o tráfego através da VPN.</li>
+                    <li>Executar um proxy Tor (Porta 9050).</li>
+                    <li>Executar um proxy SOCKS5 (Dante) para o tráfego da VPN (Porta 1080).</li>
+                    <li>Implementar um firewall "Kill Switch" para prevenir vazamentos de IP.</li>
+                </ul>
+            </li>
+            <li>
+                <strong>`kali-linux`</strong>: O ambiente do cliente, contendo as ferramentas do Kali Linux para a execução das atividades. Todo o tráfego deste contêiner é roteado através do `hacknet-gateway`.
+            </li>
+        </ul>
+
+        <h3>2.2. Fluxo de Rede</h3>
+        <p>O tráfego segue o seguinte caminho:</p>
+        <pre>Máquina Host (Navegador)  ──> Proxy (1080 ou 9050) ──┐
+                                                     ├─> hacknet-gateway ─> WireGuard VPN ─> Internet
+Contêiner `kali-linux` ────────────────────────────┘</pre>
+
+        <h3>2.3. Relação entre VPN e Tor (Tor-over-VPN)</h3>
+        <div class="note">
+            <p>É importante entender como o tráfego do Tor interage com a VPN neste ambiente.</p>
+            <p>A estrutura implementada é a de <strong>Tor-over-VPN</strong>.</p>
+            <pre>Você → Proxy Tor (Porta 9050) → Gateway → Túnel VPN → Rede Tor → Internet</pre>
+            <p><strong>Como funciona:</strong></p>
+            <ul>
+                <li>O contêiner <code>hacknet-gateway</code> força <strong>todo</strong> o seu tráfego de saída a passar pelo túnel WireGuard (VPN).</li>
+                <li>O serviço do Tor roda dentro deste contêiner.</li>
+                <li>Quando o serviço do Tor tenta se conectar à rede Tor, essa conexão é, ela mesma, capturada pelas regras do sistema e roteada para dentro do túnel VPN.</li>
+            </ul>
+            <p><strong>Vantagem Principal:</strong> Seu provedor de internet não consegue ver que você está se conectando à rede Tor, ele apenas vê tráfego criptografado para o seu servidor VPN.</p>
+        </div>
+
+        <h2>3. Como Usar</h2>
+
+        <h3>3.1. Pré-requisitos</h3>
+        <ul>
+            <li>Docker</li>
+            <li>Docker Compose</li>
+        </ul>
+
+        <h3>3.2. Iniciando o Ambiente</h3>
+        <ol>
+            <li>
+                <strong>Escolha a VPN:</strong> Abra o arquivo <code>docker-compose.yml</code> e edite a variável de ambiente <code>WG_CONFIG</code> no serviço `hacknet-gateway`. Substitua o valor pelo nome do arquivo <code>.conf</code> da sua configuração WireGuard desejada (localizado em <code>gateway/wireguard/</code>).
+                <pre>environment:
+  - WG_CONFIG=br-for-wg-001.conf</pre>
+            </li>
+            <li>
+                <strong>Construa e inicie os contêineres:</strong> Execute o seguinte comando no terminal na raiz do projeto.
+                <pre>docker compose up -d --build</pre>
+            </li>
+        </ol>
+
+        <h3>3.3. Usando a partir da Máquina Host</h3>
+        <p>Você pode configurar seu navegador ou outras ferramentas para usar os proxies expostos pelo gateway:</p>
+        <ul>
+            <li><strong>Proxy SOCKS5 via VPN (Recomendado):</strong>
+                <ul>
+                    <li>Endereço: <code>127.0.0.1</code></li>
+                    <li>Porta: <code>1080</code></li>
+                </ul>
+            </li>
+            <li><strong>Proxy SOCKS5 via Tor:</strong>
+                <ul>
+                    <li>Endereço: <code>127.0.0.1</code></li>
+                    <li>Porta: <code>9050</code></li>
+                </ul>
+            </li>
+        </ul>
+        <p>Exemplo com <code>curl</code> para verificar o IP (via VPN):</p>
+        <pre>curl --proxy socks5h://127.0.0.1:1080 ipinfo.io/ip</pre>
+
+        <h3>3.4. Usando a partir do Contêiner Kali</h3>
+        <ol>
+            <li>
+                <strong>Acesse o terminal do Kali:</strong>
+                <pre>docker exec -it kali-linux /bin/bash</pre>
+            </li>
+            <li>
+                <strong>Opção A: Roteamento Total (Recomendado)</strong><br>
+                Configure o gateway como a rota padrão. Todo o tráfego do contêiner Kali passará pela VPN.
+                <pre>ip route add default via 10.77.10.4</pre>
+                Para verificar seu IP público:
+                <pre>curl ipinfo.io/ip</pre>
+            </li>
+            <li>
+                <strong>Opção B: Roteamento por Aplicação (Proxy)</strong><br>
+                Use ferramentas como <code>proxychains</code> ou <code>torsocks</code> para rotear o tráfego de aplicações específicas.
+                <pre># Via VPN
+proxychains curl ipinfo.io/ip
+
+# Via Tor
+torsocks curl ipinfo.io/ip</pre>
+                <div class="note">Nota: Você precisará configurar o <code>/etc/proxychains.conf</code> para usar o proxy <code>socks5 10.77.10.4 1080</code>.</div>
+            </li>
+        </ol>
+
+        <h2>4. Funcionalidades de Segurança</h2>
+        <ul>
+            <li>
+                <strong>Kill Switch:</strong> O `start.sh` configura o `iptables` e `ip6tables` com uma política padrão de <code>DROP</code> para todo o tráfego de saída (`OUTPUT`) e encaminhamento (`FORWARD`). Regras explícitas permitem a saída apenas pela interface da VPN. Se a VPN cair, a conexão com a internet é bloqueada, prevenindo qualquer vazamento do seu IP real.
+            </li>
+            <li>
+                <strong>Prevenção de Vazamento de IPv6:</strong> O IPv6 é completamente desativado no contêiner `hacknet-gateway` através de <code>sysctl</code> no `docker-compose.yml`. Isso elimina a complexidade do roteamento dual-stack e remove o risco de vazamentos de IP via IPv6, que foi um problema identificado durante o desenvolvimento.
+            </li>
+            <li>
+                <strong>Configuração Dinâmica do Proxy:</strong> O script `start.sh` configura dinamicamente o servidor proxy Dante (`sockd`) para usar a interface de rede correta (a da VPN) para suas conexões de saída. Isso força o tráfego do proxy a passar pelo túnel seguro, o que foi crucial para corrigir um vazamento de IP.
+            </li>
+        </ul>
+        
+        <h2>5. Estrutura do Projeto</h2>
+        <ul>
+            <li><code>docker-compose.yml</code>: Orquestra a criação e configuração dos contêineres.</li>
+            <li><code>gateway/Dockerfile.gateway</code>: Define como construir a imagem do gateway.</li>
+            <li><code>gateway/start.sh</code>: O coração do gateway. Script de inicialização que configura a VPN, firewall, e serviços.</li>
+            <li><code>gateway/danted.conf</code>: Template da configuração do proxy Dante.</li>
+            <li><code>gateway/torrc</code>: Arquivo de configuração do Tor.</li>
+            <li><code>gateway/wireguard/</code>: Diretório contendo as configurações de conexão da VPN.</li>
+            <li><code>kali/Dockerfile.kali</code>: Define como construir a imagem do cliente Kali.</li>
+        </ul>
+    </div>
+</body>
+</html>
