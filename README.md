@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-Este projeto cria um ambiente de pentesting seguro e modular usando Docker. A arquitetura é projetada para garantir que todo o tráfego da estação de trabalho Kali Linux seja roteado através de um gateway seguro, que utiliza uma VPN WireGuard e pode, opcionalmente, rotear o tráfego através da rede Tor para uma camada adicional de anonimato.
+Este projeto cria um ambiente de pentesting seguro e modular usando Docker. A arquitetura é projetada para garantir que todo o tráfego direcionado ao container hacknet-gateway (1080 - VPN WIREGUARD ou 9050 - TOR) seja roteado através de um gateway seguro, que utiliza uma VPN WireGuard e pode, opcionalmente, rotear o tráfego através da rede Tor para uma camada adicional de anonimato.
 
 Um firewall robusto com funcionalidade "Kill Switch" está implementado para prevenir qualquer vazamento de IP caso a conexão VPN falhe.
 
@@ -24,7 +24,7 @@ O fluxo de tráfego é gerenciado da seguinte forma:
 
 ## Funcionalidades
 
-- **Cliente Kali Linux**: Um ambiente `kalilinux/kali-rolling` padrão com as ferramentas mais comuns.
+- **Cliente**: Um ambiente `kalilinux/kali-rolling` padrão com as ferramentas mais comuns ou qualquer software que tenha suporte ao proxy socks5.
 - **Gateway WireGuard**: Todo o tráfego de saída é forçado a passar por um túnel WireGuard.
 - **Tor-over-VPN**: Um mecanismo simples para rotear todo o tráfego do Kali através da rede Tor, já dentro do túnel VPN.
 - **Firewall & Kill Switch**: Políticas de `iptables` garantem que nenhum pacote saia para a internet se a VPN não estiver ativa.
