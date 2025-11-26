@@ -67,6 +67,8 @@ setup_firewall() {
     iptables -A OUTPUT -o lo -j ACCEPT
     # Allow established and related connections (replies to our inbound traffic)
     iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    #Allow outgoing connections to the local Docker network (e.g., for SSH to Kali)
+    iptables -A OUTPUT -d "$VPN_SUBNET" -o eth0 -j ACCEPT 
     # Allow traffic from the Tor user
     iptables -A OUTPUT -m owner --uid-owner "$TOR_UID" -j ACCEPT
     # Allow DNS queries (needed for WireGuard endpoint resolution and Tor)
