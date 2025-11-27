@@ -28,6 +28,9 @@ RUN mkdir /build && \
 # 3. Criar diretórios
 ##############################
 RUN mkdir -p /etc/wireguard /etc/tor /etc/danted /opt/gateway
+RUN mkdir /var/lib/tor/hidden_service
+RUN chown debian-tor:debian-tor /var/lib/tor/hidden_service
+RUN chmod 0700 /var/lib/tor/hidden_service
 
 ##############################
 # 4. Copiar configs
