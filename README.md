@@ -40,21 +40,33 @@ O fluxo de tráfego é gerenciado da seguinte forma:
     Coloque seus arquivos de configuração `.conf` do WireGuard no diretório `gateway/wireguard/`.
 
 2.  **Selecione a Configuração VPN**:
-    Edite o arquivo `docker-compose.yml` e defina a variável de ambiente `WG_CONFIG` no serviço `hacknet-gateway` para o nome do arquivo que você deseja usar.
-    ```yaml
-    services:
-      hacknet-gateway:
-        ...
-        environment:
-          - WG_CONFIG=seu-arquivo-wireguard.conf # <-- Altere aqui
+    Edite o arquivo `.env` e defina a variável de ambiente `WG_CONFIG` para o nome do arquivo que você deseja usar.
+    ```bash
+    WG_CONFIG=seu-arquivo-wireguard.conf # <-- Altere aqui
     ```
 
-3.  **Construa e Inicie o Ambiente**:
+3.  **Configuração da Rede (Opcional)**:
+    O range de IPs da rede Docker e os IPs estáticos dos contêineres são configurados através do arquivo `.env`. Por padrão, ele usa a rede `10.77.10.0/28`.
+
+    Para personalizar o range, edite as seguintes variáveis no arquivo `.env`:
+
+    ```bash
+    NETWORK_SUBNET=10.77.10.0/28 # Defina aqui o CIDR da sua rede, ex: 192.168.50.0/24
+
+    # IPs Estáticos dos Serviços
+    # ATENÇÃO: Certifique-se de que estes IPs pertencem à NETWORK_SUBNET definida acima
+    GATEWAY_IP=10.77.10.4   # IP do contêiner hacknet-gateway
+    KALI_IP=10.77.10.2      # IP do contêiner kali-linux
+    TOR_CLIENT_IP=10.77.10.6 # IP usado pelo Kali para rotear tráfego via Tor transparente
+    ```
+    **Importante**: Após alterar o `NETWORK_SUBNET`, você *deve* ajustar `GATEWAY_IP`, `KALI_IP` e `TOR_CLIENT_IP` para que estejam dentro do novo range da sub-rede.
+
+4.  **Construa e Inicie o Ambiente**:
     Na raiz do projeto, execute:
     ```sh
     docker compose up -d --build
     ```
-4. **Caso quiser, inicie apenas o container hacknet-gateway**
+5. **Caso quiser, inicie apenas o container hacknet-gateway**
    Na raiz do projeto, execute:
    ```sh
     docker compose up -d --build hacknet-gateway
@@ -134,3 +146,70 @@ OBS:
 - **Scripts Shell**: Manter `set -euo pipefail`, indentação de 4 espaços e blocos de código funcional.
 - **Dockerfiles**: Agrupar blocos `RUN` e documentar flags importantes como `privileged` e `cap_add`.
 - **Commits**: Seguir o padrão `type: description` (ex: `feat: add tor routing mode`, `fix: correct firewall rule`).
+
+### Customização da Imagem Kali
+
+No `Dockerfile.kali`, a instalação do pacote `kali-linux-default` foi comentada intencionalmente. Isso permite que você escolha se deseja uma instalação mínima do Kali (apenas com as ferramentas essenciais como `net-tools`, `git`, `curl`, etc.) ou uma instalação completa.
+
+*   **Instalação Mínima (Padrão Atual)**: Se a linha permanecer comentada (`#kali-linux-default`), o contêiner Kali será construído com um conjunto menor de ferramentas, resultando em uma imagem menor e tempos de construção mais rápidos. Você pode instalar ferramentas específicas conforme a necessidade.
+*   **Instalação Completa**: Para ter o conjunto completo de ferramentas padrão do Kali, descomente a linha `kali-linux-default` no `Dockerfile.kali`:
+
+    ```dockerfile
+    RUN apt update && apt install -y \
+        kali-linux-default \
+        net-tools iproute2 iputils-ping dnsutils \
+        vim nano curl wget git zsh openssh-server \
+        && apt clean
+    ```
+    Após modificar o `Dockerfile.kali`, lembre-se de reconstruir a imagem:
+    ```bash
+    docker compose build kali-linux
+    ```
+
+### Configurando um Tor Hidden Service (Serviço Oculto)
+
+Você pode expor serviços rodando dentro de seus containers (por exemplo, um servidor SSH no Kali) como um Tor Hidden Service, tornando-os acessíveis apenas via rede Tor e sem revelar o IP de origem.
+
+**Passos para configurar:**
+
+1.  **Edite `gateway/tor/torrc`**:
+    No arquivo `gateway/tor/torrc`, adicione as linhas de configuração `HiddenServiceDir` e `HiddenServicePort`. Um exemplo para expor a porta 22 (SSH) do container Kali (cujo IP é `10.77.10.2` por padrão) está comentado no próprio arquivo:
+
+    ```ini
+    # Exemplo de Tor Hidden Service:
+    # Para expor a porta 22 (SSH) do container Kali (10.77.10.2) como um serviço oculto:
+    #
+    # HiddenServiceDir /var/lib/tor/hidden_service/kali_ssh/
+    # HiddenServicePort 22 10.77.10.2:22
+    #
+    # O endereço .onion será gerado e salvo em /var/lib/tor/hidden_service/kali_ssh/hostname
+    # O diretório /var/lib/tor/hidden_service/kali_ssh/ deve ter permissões 0700 e ser de propriedade do usuário "debian-tor".
+    # Para persistir este serviço oculto, adicione um volume no docker-compose.yml:
+    # - ./gateway/tor_hs_kali_ssh:/var/lib/tor/hidden_service/kali_ssh/
+    ```
+    **Lembre-se de descomentar as linhas `HiddenServiceDir` e `HiddenServicePort` para ativá-lo.**
+
+2.  **Persistência do Serviço Oculto (Obrigatório)**:
+    Para garantir que o seu endereço `.onion` não mude cada vez que o container `hacknet-gateway` for reiniciado, é **crucial** persistir o diretório `HiddenServiceDir` usando um volume Docker.
+
+    Edite o seu `docker-compose.yml` e adicione um volume ao serviço `hacknet-gateway` (substitua `kali_ssh` pelo nome que você usou em `HiddenServiceDir`):
+
+    ```yaml
+    services:
+      hacknet-gateway:
+        # ...
+        volumes:
+          # ... outros volumes ...
+          - ./gateway/tor_hs_kali_ssh:/var/lib/tor/hidden_service/kali_ssh/
+    ```
+    O diretório `./gateway/tor_hs_kali_ssh` será criado automaticamente no seu host e conterá os arquivos de chave e o `hostname` (o seu endereço `.onion`).
+
+3.  **Reconstrua e Inicie**:
+    Após as alterações, você precisará reconstruir o serviço `hacknet-gateway` e iniciá-lo:
+
+    ```bash
+    docker compose up -d --build hacknet-gateway
+    ```
+    Após a inicialização, o endereço `.onion` estará disponível no arquivo `gateway/tor_hs_kali_ssh/hostname` no seu host.
+
+    **Nota**: Certifique-se de que o serviço que você está expondo (ex: `sshd` no Kali) esteja configurado para escutar na porta e interface corretas dentro do container. No Kali, o `sshd` geralmente escuta em `0.0.0.0:22` por padrão.

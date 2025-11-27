@@ -3,9 +3,9 @@ FROM kalilinux/kali-rolling
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && apt install -y \
-    kali-linux-default \
+    #kali-linux-default \
     net-tools iproute2 iputils-ping dnsutils \
-    vim nano curl wget git \
+    vim nano curl wget git zsh openssh-server \
     && apt clean
 
 # Copia e prepara o script de gerenciamento de rede

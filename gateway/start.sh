@@ -8,7 +8,7 @@ set -e
 # Default WAN interface is eth0, will be overwritten by WireGuard
 WAN_IF="eth0"
 WG_IF=""
-VPN_SUBNET="10.77.10.0/28"
+VPN_SUBNET="${VPN_SUBNET:-10.77.10.0/28}"
 TOR_TRANSPARENT_PORT=9041
 TOR_DNS_PORT=5353
 TOR_CLIENT_IP="${TOR_CLIENT_IP:-10.77.10.6}"

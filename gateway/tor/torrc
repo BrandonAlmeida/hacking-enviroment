@@ -5,3 +5,14 @@ DNSPort 0.0.0.0:5353
 AutomapHostsOnResolve 1
 VirtualAddrNetworkIPv4 10.192.0.0/10
 Log notice stderr
+
+# Exemplo de Tor Hidden Service:
+# Para expor a porta 22 (SSH) do container Kali (10.77.10.2) como um serviço oculto:
+#
+# HiddenServiceDir /var/lib/tor/hidden_service/kali_ssh/
+# HiddenServicePort 22 10.77.10.2:22
+#
+# O endereço .onion será gerado e salvo em /var/lib/tor/hidden_service/kali_ssh/hostname
+# O diretório /var/lib/tor/hidden_service/kali_ssh/ deve ter permissões 0700 e ser de propriedade do usuário "debian-tor".
+# Para persistir este serviço oculto, adicione um volume no docker-compose.yml:
+# - ./gateway/tor_hs_kali_ssh:/var/lib/tor/hidden_service/kali_ssh/
