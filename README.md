@@ -131,6 +131,11 @@ curl --proxy socks5h://127.0.0.1:9050 https://icanhazip.com
 OBS:   
 - A mesma lógica se aplica a configuração de proxy via navegador (firefox, chrome, edge, etc...)
 - Funciona também via [proxychains](https://www.pyproxy.com/information/how-to-configure-socks5-proxy-via-proxychains.html)
+
+### Controles de Exposição dos Proxies
+- **Modo isolado (recomendado para uso solo):** No `docker-compose.yml`, prefixe as portas com `127.0.0.1` (ex.: `127.0.0.1:9050:9050`). Assim apenas o host que executa o Docker acessa os proxies. Combine com firewall local para impedir conexões externas.
+- **Modo LAN compartilhado:** Mantenha os binds padrão (`9050:9050`, `1080:1080`) e restrinja o acesso às portas usando firewall do host (permitindo somente IPs confiáveis da rede). Considere habilitar autenticação no Dante (`clientmethod: username`) para identificar clientes e evitar abuso.
+- Em ambos os cenários, lembre-se de que qualquer máquina autorizada compartilhará o mesmo túnel WireGuard/Tor e, portanto, a mesma identidade externa. Planeje o monitoramento e os logs de acordo.
   
 ## Para Desenvolvedores
 

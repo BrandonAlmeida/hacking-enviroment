@@ -71,19 +71,19 @@ setup_firewall() {
     iptables -A OUTPUT -d "$VPN_SUBNET" -o eth0 -j ACCEPT 
     # Allow traffic from the Tor user
     iptables -A OUTPUT -m owner --uid-owner "$TOR_UID" -j ACCEPT
-    # Allow DNS queries (needed for WireGuard endpoint resolution and Tor)
-    iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
-    iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
 
     # If WireGuard is up, allow its traffic and route all other allowed output through it
     if [ -n "$WG_IF" ]; then
+        # Allow DNS queries only through the WireGuard interface
+        iptables -A OUTPUT -o "$WG_IF" -p udp --dport 53 -j ACCEPT
+        iptables -A OUTPUT -o "$WG_IF" -p tcp --dport 53 -j ACCEPT
         # This assumes the WireGuard endpoint port is known.
         # It should be dynamically extracted if possible, but 51820 is standard.
         iptables -A OUTPUT -o eth0 -p udp --dport 51820 -j ACCEPT
         iptables -A OUTPUT -o "$WG_IF" -j ACCEPT
         echo "[+] Firewall configured to route through WireGuard interface: $WG_IF"
     else
-        echo "[!] WARNING: WireGuard is not active. Firewall will NOT allow outbound traffic except for Tor and DNS."
+        echo "[!] WARNING: WireGuard is not active. Firewall will NOT allow outbound traffic except for Tor-owned processes."
     fi
 
     # --- IPv6 Firewall Rules ---
@@ -133,18 +133,18 @@ setup_firewall() {
     ip6tables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
     # Allow traffic from the Tor user (Tor supports IPv6)
     ip6tables -A OUTPUT -m owner --uid-owner "$TOR_UID" -j ACCEPT
-    # Allow DNS queries (needed for WireGuard endpoint resolution and Tor)
-    ip6tables -A OUTPUT -p udp --dport 53 -j ACCEPT
-    ip6tables -A OUTPUT -p tcp --dport 53 -j ACCEPT
 
     # If WireGuard is up, allow its traffic and route all other allowed output through it
     if [ -n "$WG_IF" ]; then
+        # Allow DNS queries only through the WireGuard interface
+        ip6tables -A OUTPUT -o "$WG_IF" -p udp --dport 53 -j ACCEPT
+        ip6tables -A OUTPUT -o "$WG_IF" -p tcp --dport 53 -j ACCEPT
         # WireGuard itself uses UDP 51820 for both IPv4 and IPv6
         ip6tables -A OUTPUT -o eth0 -p udp --dport 51820 -j ACCEPT
         ip6tables -A OUTPUT -o "$WG_IF" -j ACCEPT
         echo "[+] Firewall configured to route IPv6 through WireGuard interface: $WG_IF"
     else
-        echo "[!] WARNING: WireGuard is not active. IPv6 Firewall will NOT allow outbound traffic except for Tor and DNS."
+        echo "[!] WARNING: WireGuard is not active. IPv6 firewall will NOT allow outbound traffic except for Tor-owned processes."
     fi
 
     # --- Transparent Tor redirection for Kali when using alternate source IP ---
@@ -187,18 +187,19 @@ fi
 ##############################
 echo "[+] Configuring DNS..."
 DNS_SERVER=""
-if [ -n "$WG_CONFIG" ] && [ -f "/etc/wireguard/$WG_CONFIG" ]; then
+if [ -n "$WG_IF" ] && [ -n "$WG_CONFIG" ] && [ -f "/etc/wireguard/$WG_CONFIG" ]; then
     # Try to find DNS server in the WireGuard config, ignoring commented lines
     DNS_SERVER=$(grep -v '^#' "/etc/wireguard/$WG_CONFIG" | grep -oP '(?<=DNS\s=\s)[^\s,]+' | head -n 1)
+    if [ -z "$DNS_SERVER" ]; then
+        echo "[!] No DNS directive found in WireGuard config. Falling back to 1.1.1.1 (routed via WireGuard)."
+        DNS_SERVER="1.1.1.1"
+    fi
+    echo "[+] Setting nameserver to $DNS_SERVER (WireGuard locked)"
+    echo "nameserver $DNS_SERVER" > /etc/resolv.conf
+else
+    echo "[!] WireGuard interface unavailable. Locking resolv.conf to localhost to avoid leaks."
+    echo "nameserver 127.0.0.1" > /etc/resolv.conf
 fi
-
-if [ -z "$DNS_SERVER" ]; then
-    echo "[-] No DNS found in WireGuard config or VPN not active. Using fallback DNS 1.1.1.1."
-    DNS_SERVER="1.1.1.1"
-fi
-
-echo "[+] Setting nameserver to $DNS_SERVER"
-echo "nameserver $DNS_SERVER" > /etc/resolv.conf
 
 
 ##############################
